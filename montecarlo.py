@@ -1,0 +1,106 @@
+from move_encoder import *
+import math
+import numpy as np
+from encoder import encode_board
+import torch.nn.functional as F
+from shogi import Board
+
+class Node:
+    def __init__(self, state, parent=None):
+        self.state = Board(state.sfen())
+        self.parent = parent
+        self.children = {}
+        self.visit_count = 0
+        self.value_sum = 0
+        self.prior = 0
+
+    def is_expanded(self):
+        return len(self.children) > 0
+
+    def value(self):
+        return self.value_sum / self.visit_count if self.visit_count > 0 else 0
+
+def softmax_temperature(x, temp=1.0):
+    x = x - np.max(x)
+    e_x = np.exp(x / temp)
+    return e_x / e_x.sum()
+
+class MCTS:
+    def __init__(self, model, simulations=100, c_puct=2.0):
+        self.model = model
+        self.root = None
+        self.simulations = simulations
+        self.c_puct = c_puct
+
+    def run(self, board):
+        self.root = Node(board)
+        device = next(self.model.parameters()).device
+        state_tensor = encode_board(board).unsqueeze(0).to(device)
+        policy, val = self.model(state_tensor)
+        policy = F.softmax(policy[0], dim=0)
+
+        for move in board.legal_moves:
+            index = move_to_index(move)
+            if index is None or index < 0 or index >= len(policy):
+                print("lol")
+                continue
+            new_board = Board(board.sfen())
+            new_board.push(move)
+            self.root.children[move] = Node(new_board)
+            self.root.children[move].prior = policy[index].item()
+
+        for i, sim in enumerate(range(self.simulations)):
+            node = self.root
+            path = [node]
+
+            while node.is_expanded():
+                move, node = self.select_child(node)
+                path.append(node)
+
+            value = self.evaluate_leaf(node)
+            self.backpropagate(path, value)
+
+        return self.select_action(self.root)
+
+    def select_child(self, node):
+        total_visits = sum(child.visit_count for child in node.children.values())
+        best_score = -float('inf')
+        best_move = None
+        best_child = None
+
+        for move, child in node.children.items():
+            ucb = child.value() + self.c_puct * child.prior * math.sqrt(total_visits) / (1 + child.visit_count)
+            if ucb > best_score:
+                best_score = ucb
+                best_move = move
+                best_child = child
+
+        return best_move, best_child
+
+    def evaluate_leaf(self, node):
+        device = next(self.model.parameters()).device
+        x = encode_board(node.state).unsqueeze(0).to(device)
+        p, value = self.model(x)
+        return value.item()
+
+    def backpropagate(self, path, value):
+        for node in reversed(path):
+            node.value_sum += value
+            node.visit_count += 1
+            value = -value
+
+    def select_action(self, root, temperature=1.0):
+        device = next(self.model.parameters()).device
+        visits = torch.tensor(
+            [child.visit_count for child in root.children.values()],
+            dtype=torch.float32,
+            device=device
+        )
+
+        moves = list(root.children.keys())
+
+        if temperature == 0:
+            return moves[torch.argmax(visits).item()]
+        probs = softmax_temperature(visits.cpu().numpy(), temp=temperature)
+        choice = torch.multinomial(torch.tensor(probs), num_samples=1).item()
+        return moves[choice]
