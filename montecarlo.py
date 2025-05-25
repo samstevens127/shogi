@@ -42,7 +42,6 @@ class MCTS:
         for move in board.legal_moves:
             index = move_to_index(move)
             if index is None or index < 0 or index >= len(policy):
-                print("lol")
                 continue
             new_board = Board(board.sfen())
             new_board.push(move)

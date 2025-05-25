@@ -4,9 +4,9 @@ from network import ShogiNet
 from encoder import encode_board
 from montecarlo import MCTS
 
-model_path1 = './models/model-it0.bin'
+model_path1 = './models/model-it99.bin'
 
-model_path2 = './models/model-it31.bin'
+model_path2 = './models/model-it7.bin'
 
 def play_against_model(model_path, model_path2, simulations=100):
     # Load model
@@ -30,9 +30,9 @@ def play_against_model(model_path, model_path2, simulations=100):
 
         if board.turn == shogi.BLACK:
             # Model's turn
-            print("Model2 is thinking...")
+            print("Model99 is thinking...")
             move = mcts2.run(board)
-            print(f"Model plays: {move.usi()}")
+            print(f"Model99 plays: {move.usi()}")
             board.push(move)
             # Human's turn
             #move_str = input("Your move (USI): ").strip()
@@ -46,9 +46,9 @@ def play_against_model(model_path, model_path2, simulations=100):
             #    continue
         else:
             # Model's turn
-            print("Model is thinking...")
+            print("Model1 is thinking...")
             move = mcts.run(board)
-            print(f"Model plays: {move.usi()}")
+            print(f"Model1 plays: {move.usi()}")
             board.push(move)
 
     print("Game over.")
