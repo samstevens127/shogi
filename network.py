@@ -24,7 +24,7 @@ class ShogiNet(nn.Module):
             nn.Conv2d(119, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
-            *[ResidualBlock(256) for i in range(10)]
+            *[ResidualBlock(256) for i in range(20)]
         )
         self.policy_head = nn.Sequential(
             nn.Conv2d(256, 2, 1),
