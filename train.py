@@ -65,15 +65,17 @@ def train_ddp(rank, world_size):
             print(f'Running iteration {iteration + 1}')
         ddp_model.eval()
 
-        if rank == 0:
-            print(f'generating for iter {iteration}')
-            samples = play_games(model, num_games // world_size, device)
-            print(f'done generating for iter {iteration}')
-        else: 
-            samples = None
+        print(f'[Rank {rank}] generating {num_games // world_size} games for iter {iteration}')
+        samples = play_games(model, num_games // world_size, device)
 
-        samples_list = [samples]  # broadcast_object_list requires a list
-        dist.broadcast_object_list(samples_list, src=0)
+        gathered_samples = [None for _ in range(world_size)]
+        dist.all_gather_object(gathered_samples, samples)
+
+        # Only rank 0 concatenates and saves if needed
+        if rank == 0:
+            all_samples = [sample for sublist in gathered_samples for sample in sublist]
+        else:
+            all_samples = None
 
         ddp_model.train()
 
