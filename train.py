@@ -21,15 +21,16 @@ import os
 import threading
 import time
 import datetime
+from copy import deepcopy
 
 import numpy as np
 from tqdm import tqdm, trange
 
 #set variables
-num_games = 900
+num_games = 2
 num_iter  = 10
 num_epochs= 10
-num_workers = 10
+num_workers = 2
 
 def train_ddp(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
@@ -220,13 +221,19 @@ def train():
         dataset = ShogiDataset(samples)
         dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
-        for epoch in range(num_epochs):
-            for x, pi, v in dataloader:
-                x, pi, v = x.to(device), pi.to(device), v.to(device)
 
-                pred_pi, pred_v = model(x)
-                loss_pi = -torch.sum(pi * torch.log_softmax(pred_pi, dim=1)) / x.size(0)
-                loss_v = F.mse_loss(pred_v, v)
+
+        for epoch in range(num_epochs):
+            pred_list = []
+            target_list = []
+            for x_, pi_, v_ in dataloader:
+                pred_list.append(model.predict_on_batch(x_))
+                target_list.append(deepcopy((pi_,v_)))
+            for pred, target, in zip(pred_list,target_list):
+                pred_pi, pred_v = pred
+                target_pi, target_v = target
+                loss_pi = -torch.sum(target_pi * torch.log_softmax(pred_pi, dim=1)) / x.size(0)
+                loss_v = F.mse_loss(pred_v, target_v)
                 loss = loss_pi + loss_v
 
                 optimizer.zero_grad()
