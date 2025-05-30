@@ -21,6 +21,7 @@ import os
 import threading
 import time
 import datetime
+from copy import deepcopy
 
 import numpy as np
 from tqdm import tqdm, trange
@@ -65,11 +66,22 @@ def train_ddp(rank, world_size):
             print(f'Running iteration {iteration + 1}')
         ddp_model.eval()
 
+<<<<<<< HEAD
         print(f'[Rank {rank}] generating {num_games // world_size} games for iter {iteration}')
         start = time.time()
         samples = play_games(model, num_games // world_size, device)
         end = time.time()
         print(f'finished play_games in {end - start:.2f} seconds')
+=======
+        if rank == 0:
+            print(f'generating for iter {iteration}')
+            start = time.time()
+            samples = play_games(model, num_games // world_size, device)
+            end= time.time()
+            print(f'done generating for iter {iteration} (took {end - start} seconds)')
+        else: 
+            samples = None
+>>>>>>> torchscript
 
         gathered_samples = [None for _ in range(world_size)]
         dist.all_gather_object(gathered_samples, samples)
@@ -136,14 +148,16 @@ def self_play(model, device):
 def generate_games_batch(device, queue, num_games, model_path, counter, lock):
     try:
         device = torch.device('cpu')
-        model = ShogiNet().to(device)
+        model = ShogiNet()
         model.load_state_dict(torch.load(model_path, map_location=device))
         model.eval()
+
+        scripted_model = torch.jit.script(model)
 
         data = []
         with torch.no_grad():
             for _ in range(num_games):
-                data.extend(self_play(model, device))
+                data.extend(self_play(scripted_model, device))
                 with lock:
                     counter.value += 1
         print(f'length of data is {len(data)}')
@@ -160,7 +174,7 @@ def play_games(model, num_games, device, model_path="./checkpoints/latest_model.
     model_path = os.path.abspath(model_path)
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Missing model file at: {model_path}")
-    ctx = mp.get_context('spawn')
+    ctx = mp.get_context('forkserver')
 
     manager = ctx.Manager()
     queue = manager.Queue()
@@ -226,13 +240,19 @@ def train():
         dataset = ShogiDataset(samples)
         dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
-        for epoch in range(num_epochs):
-            for x, pi, v in dataloader:
-                x, pi, v = x.to(device), pi.to(device), v.to(device)
 
-                pred_pi, pred_v = model(x)
-                loss_pi = -torch.sum(pi * torch.log_softmax(pred_pi, dim=1)) / x.size(0)
-                loss_v = F.mse_loss(pred_v, v)
+
+        for epoch in range(num_epochs):
+            pred_list = []
+            target_list = []
+            for x_, pi_, v_ in dataloader:
+                pred_list.append(model.predict_on_batch(x_))
+                target_list.append(deepcopy((pi_,v_)))
+            for pred, target, in zip(pred_list,target_list):
+                pred_pi, pred_v = pred
+                target_pi, target_v = target
+                loss_pi = -torch.sum(target_pi * torch.log_softmax(pred_pi, dim=1)) / x.size(0)
+                loss_v = F.mse_loss(pred_v, target_v)
                 loss = loss_pi + loss_v
 
                 optimizer.zero_grad()
