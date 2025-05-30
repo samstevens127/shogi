@@ -26,10 +26,10 @@ import numpy as np
 from tqdm import tqdm, trange
 
 #set variables
-num_games = 900
+num_games = 10
 num_iter  = 10
 num_epochs= 10
-num_workers = 10
+num_workers = 2
 
 def train_ddp(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
@@ -66,7 +66,10 @@ def train_ddp(rank, world_size):
         ddp_model.eval()
 
         print(f'[Rank {rank}] generating {num_games // world_size} games for iter {iteration}')
+        start = time.time()
         samples = play_games(model, num_games // world_size, device)
+        end = time.time()
+        print(f'finished play_games in {end - start:.2f} seconds')
 
         gathered_samples = [None for _ in range(world_size)]
         dist.all_gather_object(gathered_samples, samples)
@@ -132,6 +135,7 @@ def self_play(model, device):
 
 def generate_games_batch(device, queue, num_games, model_path, counter, lock):
     try:
+        device = torch.device('cpu')
         model = ShogiNet().to(device)
         model.load_state_dict(torch.load(model_path, map_location=device))
         model.eval()
