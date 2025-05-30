@@ -27,7 +27,7 @@ import numpy as np
 from tqdm import tqdm, trange
 
 #set variables
-num_games = 2
+num_games = 10
 num_iter  = 10
 num_epochs= 10
 num_workers = 2
@@ -135,10 +135,12 @@ def generate_games_batch(device, queue, num_games, model_path, counter, lock):
         model.load_state_dict(torch.load(model_path, map_location=device))
         model.eval()
 
+        scripted_model = torch.jit.script(model)
+
         data = []
         with torch.no_grad():
             for _ in range(num_games):
-                data.extend(self_play(model, device))
+                data.extend(self_play(scripted_model, device))
                 with lock:
                     counter.value += 1
         print(f'length of data is {len(data)}')
