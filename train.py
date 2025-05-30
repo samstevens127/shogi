@@ -68,8 +68,10 @@ def train_ddp(rank, world_size):
 
         if rank == 0:
             print(f'generating for iter {iteration}')
+            start = time.time()
             samples = play_games(model, num_games // world_size, device)
-            print(f'done generating for iter {iteration}')
+            end= time.time()
+            print(f'done generating for iter {iteration} (took {end - start} seconds)')
         else: 
             samples = None
 
@@ -131,9 +133,11 @@ def self_play(model, device):
 
 def generate_games_batch(device, queue, num_games, model_path, counter, lock):
     try:
+        device = torch.device('cpu')
         model = ShogiNet().to(device)
         model.load_state_dict(torch.load(model_path, map_location=device))
         model.eval()
+
 
         scripted_model = torch.jit.script(model)
 
@@ -157,7 +161,7 @@ def play_games(model, num_games, device, model_path="./checkpoints/latest_model.
     model_path = os.path.abspath(model_path)
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Missing model file at: {model_path}")
-    ctx = mp.get_context('spawn')
+    ctx = mp.get_context('forkserver')
 
     manager = ctx.Manager()
     queue = manager.Queue()
