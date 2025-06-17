@@ -66,13 +66,11 @@ def train_ddp(rank, world_size):
             print(f'Running iteration {iteration + 1}')
         ddp_model.eval()
 
-<<<<<<< HEAD
         print(f'[Rank {rank}] generating {num_games // world_size} games for iter {iteration}')
         start = time.time()
         samples = play_games(model, num_games // world_size, device)
         end = time.time()
         print(f'finished play_games in {end - start:.2f} seconds')
-=======
         if rank == 0:
             print(f'generating for iter {iteration}')
             start = time.time()
@@ -81,7 +79,6 @@ def train_ddp(rank, world_size):
             print(f'done generating for iter {iteration} (took {end - start} seconds)')
         else: 
             samples = None
->>>>>>> torchscript
 
         gathered_samples = [None for _ in range(world_size)]
         dist.all_gather_object(gathered_samples, samples)

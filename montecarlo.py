@@ -4,7 +4,7 @@ import numpy as np
 from encoder import encode_board
 from move_encoder import *
 import torch.nn.functional as F
-from shogi import Board
+from nshogi import Board
 
 class Tree:
     def __init__(self,root):
